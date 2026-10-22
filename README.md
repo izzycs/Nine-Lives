@@ -1,0 +1,31 @@
+# NINE LIVES
+
+A top-down horror chase through a haunted house. You are a cat, something huge is loose in the house, and you have to survive from 3:00 AM until dawn (about 3 minutes).
+
+Everything is in one self-contained `index.html` (HTML + CSS + JavaScript, no libraries, images, audio files, build step or server). Open it in Chrome to play.
+
+## Modes
+
+- **Solo:** you are the cat; the computer hunts you.
+- **Two players (one keyboard, split screen):** cat vs dog.
+
+## Controls
+
+| Action | Solo | 2P cat | 2P dog |
+| --- | --- | --- | --- |
+| Move | Arrows / WASD | WASD | Arrows |
+| Sprint / charge | Shift | Left Shift | Right Shift |
+| Dash / pounce | Space | Space | `/` or Enter |
+
+P / Esc pause · M mute · F FPS counter · R restart
+
+When the dog catches you, type the key sequence shown to struggle free. In 2-player, both players race to finish their own sequence.
+
+## Tips
+
+- Hide under beds and tables, but don't stay put while the dog is close.
+- Vents are cat-only shortcuts.
+- Smash a vase right next to the dog to stun it. The crash is loud.
+- Use headphones: the growl and paw steps tell you which side the dog is on.
+
+`sidescroller.html` is the earlier side-scrolling version of the game.
