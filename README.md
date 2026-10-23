@@ -30,7 +30,7 @@ Hold the device sideways. Touch controls appear automatically on touch screens (
 | Move | Drag anywhere on the left side of the screen (a stick appears under your thumb) |
 | Sprint | Hold the SPRINT button |
 | Dash | Tap the DASH button |
-| Struggle free | Swipe anywhere in each direction shown |
+| Struggle free | Tap the arrow pad that appears (or swipe anywhere) in each direction shown |
 | Pause, sound, fullscreen, restart, menu | Pause button at the bottom centre |
 
 Two-player mode needs a keyboard. On Android, FULLSCREEN also locks the screen to landscape; on iPhone, add the page to your home screen for a full-screen view.
@@ -38,6 +38,7 @@ Two-player mode needs a keyboard. On Android, FULLSCREEN also locks the screen t
 ## Tips
 
 - Hide under beds and tables, but don't stay put while the dog is close.
+- In solo, losing it completely only buys you a few seconds: the lights flicker, the growl stops, and it steps out of the dark right behind you. Keep moving and keep looking back.
 - Vents are cat-only shortcuts.
 - Smash a vase right next to the dog to stun it. The crash is loud.
 - Use headphones: the growl and paw steps tell you which side the dog is on.

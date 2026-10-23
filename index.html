@@ -25,6 +25,13 @@
   #ui.menu #btnSprint, #ui.menu #btnDash, #ui.menu #stick, #ui.menu #btnPause { display: none; }
   #ui.play #menu { display: none; }
   #ui.none #menu, #ui.none #btnPause, #ui.none #btnSprint, #ui.none #btnDash, #ui.none #stick { display: none; }
+  /* the struggle: the thumb controls give way to a big arrow pad */
+  #dpad { display: none; position: fixed; right: calc(env(safe-area-inset-right, 0px) + 14px); bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+          width: min(54vmin, 230px); height: min(54vmin, 230px); grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; gap: 4px;
+          grid-template-areas: ". u ." "l . r" ". d ."; }
+  #dpad .act { position: static; width: 100%; height: 100%; border-radius: 22%; font-size: 30px; background: rgba(20,16,14,0.7); border-color: rgba(224,57,58,0.7); }
+  #ui.qte #dpad { display: grid; }
+  #ui.qte #btnSprint, #ui.qte #btnDash, #ui.qte #stick, #ui.qte #btnPause, #ui.qte #menu { display: none; }
   #stick { position: fixed; left: 0; top: 0; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; pointer-events: none;
            background: rgba(236,230,218,0.07); border: 2px solid rgba(236,230,218,0.3); display: none; will-change: transform; }
   #stick.on { display: block; }
@@ -63,6 +70,12 @@
   <button id="btnSprint" class="act" type="button">SPRINT</button>
   <button id="btnDash" class="act" type="button">DASH</button>
   <button id="btnPause" class="act" type="button">&#10074;&#10074;</button>
+  <div id="dpad">
+    <button class="act" type="button" data-d="2" style="grid-area: u">&#8593;</button>
+    <button class="act" type="button" data-d="1" style="grid-area: l">&#8592;</button>
+    <button class="act" type="button" data-d="0" style="grid-area: r">&#8594;</button>
+    <button class="act" type="button" data-d="3" style="grid-area: d">&#8595;</button>
+  </div>
   <div id="menu"></div>
 </div>
 <!-- iPhone: Safari mutes Web Audio in Silent mode unless a media element is playing. This is 0.3 s of silence, looped. -->
@@ -127,6 +140,8 @@ const CONFIG = {
   noise: { walk: 40, sprint: 130, dash: 95, vase: 280, creak: 150, piano: 230 },
   qte: { keysEasy: 3, keysHard: 4, timeEasy: 2.6, timeHard: 1.6, minTime: 1.3, perUseCut: 0.12, slowmo: 0.12, push: 30 },
   scare: { times: [50, 116], dodgeWindow: 0.6, slowmo: 0.3, triggerDist: 40, wait: 24, relocate: 7, minDist: 90, maxDist: 320 },
+  // solo: when you have shaken it off, it vanishes and reappears right behind you (Jason rules)
+  blink: { grace: 14, cdStart: 24, cdEnd: 13, lostTime: 2.6, minDist: 130, distMin: 62, distMax: 96, fade: 0.75, appear: 0.3 },
   lightning: { min: 12, max: 28 },
   ghost: { min: 28, max: 55 },
 };
@@ -350,6 +365,7 @@ const TouchUI = (() => {
   button(bSprint, () => hold(A.SPRINT, true), () => hold(A.SPRINT, false));
   button(bDash, () => press(A.DASH));
   button(bPause, () => press(A.PAUSE));
+  document.querySelectorAll('#dpad button').forEach(b => { const d = +b.dataset.d; button(b, () => { if (G.qte.active) press(d); }); });
 
   // ---- menus: contextual buttons over the title, pause and end screens ----
   const ACTIONS = {
@@ -378,8 +394,8 @@ const TouchUI = (() => {
   function sync() {
     if (!TU.on) return;
     const end = (G.state === 'caught' || G.state === 'win') && G.endShown;
-    const mode = G.paused ? 'pause' : G.state === 'title' ? 'title' : end ? 'end' : (G.state === 'play' || G.state === 'intro') ? 'play' : 'none';
-    if (mode !== TU.mode) { TU.mode = mode; ui.className = mode === 'play' ? 'play' : mode === 'none' ? 'none' : 'menu'; }
+    const mode = G.paused ? 'pause' : G.state === 'title' ? 'title' : end ? 'end' : G.state === 'play' && G.qte.active ? 'qte' : (G.state === 'play' || G.state === 'intro') ? 'play' : 'none';
+    if (mode !== TU.mode) { TU.mode = mode; ui.className = mode === 'play' || mode === 'qte' || mode === 'none' ? mode : 'menu'; }
     const key = mode + (G.muted ? 'm' : '') + (G.twoP ? '2' : '') + (G.state === 'win' ? 'w' : '') + (canFS ? 'f' : '');
     if (key !== TU.menuKey) {
       TU.menuKey = key;
@@ -1851,7 +1867,7 @@ const dog = {
 function resetDog() {
   Object.assign(dog, { x: (SPAWN_DOG[0] + 0.5) * T, y: (SPAWN_DOG[1] + 0.5) * T, vx: 0, vy: 0, ang: 0, state: 'wander', t: 0,
     tx: (SPAWN_DOG[0] + 0.5) * T, ty: (SPAWN_DOG[1] + 0.5) * T, lost: 0, sees: false, repath: 0, pounceCD: 2, stam: 1, exhausted: false,
-    anim: 0, alpha: 1, scentT: 0, searchT: 0, stuck: 0, sniffT: 0, barkT: 0, stepAcc: 0, speed: 0, charging: false });
+    anim: 0, alpha: 1, scentT: 0, searchT: 0, stuck: 0, sniffT: 0, barkT: 0, stepAcc: 0, speed: 0, charging: false, lostT: 0, blinkSpot: null });
 }
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -2077,6 +2093,15 @@ function dogAI(dt) {
   const sees = dogSeesCat(); dog.sees = sees;
   const d = dist(dog, cat);
   const far = FLOW[tIdx(Math.floor(dog.x / T), Math.floor(dog.y / T))] > 28 ? D.farBoost : 1;
+  // solo: a cat that has really gotten away does not stay away for long
+  if (!G.twoP && (dog.state === 'search' || dog.state === 'wander')) {
+    const B = CONFIG.blink;
+    G.blinkCD -= dt;
+    dog.lostT = !sees && d > B.minDist ? dog.lostT + dt : 0;
+    if (G.blinkCD <= 0 && dog.lostT > B.lostTime && G.t > B.grace && cat.state === 'free' && !cat.hidden && G.scare.phase === 0 && !G.qte.active) {
+      startBlink(); return;
+    }
+  } else dog.lostT = 0;
   let speed = 0;
   switch (dog.state) {
     case 'wander':
@@ -2130,10 +2155,50 @@ function dogAI(dt) {
       return;
     case 'lurk': dog.vx = dog.vy = 0; return;
     case 'burst': return;
+    case 'blink': updateBlink(dt); return;
     case 'retreat': updateRetreat(dt); return;
     default: return;
   }
   if (dog.state === 'wander' || dog.state === 'hunt' || dog.state === 'search') { dogSteer(speed, dt); dogMove(dt); }
+}
+
+// ---- the blink (solo): the dog fades out where it stands and steps out of the dark behind you ----
+function pickBlinkSpot() {
+  const B = CONFIG.blink;
+  const back = (cat.speed > 8 ? Math.atan2(cat.vy, cat.vx) : cat.ang) + Math.PI;   // behind = opposite to the way you are going
+  for (let k = 0; k < 48; k++) {
+    const spread = 0.5 + k / 32;                                                   // widen the search if "straight behind" is a wall
+    const a = back + rand(-spread, spread), r = rand(B.distMin, B.distMax);
+    const x = cat.x + Math.cos(a) * r, y = cat.y + Math.sin(a) * r;
+    if (tileAt(x, y) !== TF || hitBox(x, y, CONFIG.dog.half + 1, false)) continue;
+    if (k < 32 && !losClear(x, y, cat.x, cat.y)) continue;                         // prefer a spot you could see if you looked back
+    return [x, y];
+  }
+  return null;
+}
+function startBlink() {
+  const B = CONFIG.blink;
+  G.blinkCD = lerp(B.cdStart, B.cdEnd, G.diff) + rand(-3, 3);
+  dog.state = 'blink'; dog.t = 0; dog.blinkSpot = null; dog.vx = dog.vy = 0; dog.lostT = 0;
+  G.lightning = Math.max(G.lightning, 0.8); G.thunderT = 0.25; Sound.sting();
+  for (let k = 0; k < 10; k++) emit(dog.x, dog.y, rand(-30, 30), rand(-30, 30), rand(0.4, 0.9), '#0a0810', rand(1.5, 3), 2);
+}
+function updateBlink(dt) {
+  const B = CONFIG.blink;
+  dog.t += dt;
+  if (dog.t < B.fade) { dog.alpha = 1 - dog.t / B.fade; return; }
+  if (!dog.blinkSpot) {
+    const s = pickBlinkSpot();
+    if (!s) { dog.alpha = 1; G.blinkCD = 5; toSearch(cat.x, cat.y); return; }     // nowhere to appear: try again soon
+    dog.blinkSpot = s; dog.x = s[0]; dog.y = s[1]; dog.alpha = 0;
+    dog.ang = Math.atan2(cat.y - dog.y, cat.x - dog.x);
+    dog.lastX = cat.x; dog.lastY = cat.y; dog.repath = 0; dog.pounceCD = Math.max(dog.pounceCD, 1.1);   // no instant pounce
+    G.shake = Math.max(G.shake, 0.45); G.flash = Math.max(G.flash, 0.12);
+    Sound.creak(0.25, panOf(dog.x)); Sound.snarl(0.7, panOf(dog.x)); buzz([30, 30, 60]);
+    for (let k = 0; k < 14; k++) emit(dog.x, dog.y, rand(-60, 60), rand(-60, 60), rand(0.4, 0.9), k % 3 ? '#0a0810' : '#2a1a2a', rand(1.5, 3), 3);
+  }
+  dog.alpha = Math.min(1, (dog.t - B.fade) / B.appear);
+  if (dog.alpha >= 1) { toHunt(); dog.scentT = G.t; }
 }
 function startPounce(a) {
   dog.state = 'pounce'; dog.t = 0; dog.pdx = Math.cos(a); dog.pdy = Math.sin(a); dog.ang = a;
@@ -2307,10 +2372,12 @@ function updateAtmos(dt, inPlay) {
   const aware = dog.state === 'hunt' || dog.state === 'windup' || dog.state === 'pounce' || dog.state === 'lunge' || dog.state === 'burst';
   let target = 0;
   if (dog.state === 'lurk') target = 0.05;
+  else if (dog.state === 'blink') target = 0.55;                       // the silence before it steps out behind you
   else if (dog.state !== 'retreat') target = clamp(1 - d / 260, 0, 1) * (aware ? 1 : dog.state === 'search' ? 0.7 : 0.45);
   if (G.qte.active) target = 1;
   G.danger += (target - G.danger) * Math.min(1, dt * 3);
-  Sound.setGrowl(dog.state === 'lurk' || dog.state === 'retreat' ? 0 : clamp(G.danger * 1.2 - 0.1, 0, 1) * (G.twoP ? 0.7 : 1), panOf(dog.x));
+  const gone = dog.state === 'lurk' || dog.state === 'retreat' || (dog.state === 'blink' && dog.alpha < 0.3);
+  Sound.setGrowl(gone ? 0 : clamp(G.danger * 1.2 - 0.1, 0, 1) * (G.twoP ? 0.7 : 1), panOf(dog.x));
   G.heartT -= dt;
   if (G.heartT <= 0) { G.heartT = 1 / lerp(1.0, 2.7, G.danger); G.heartPulse = 1; Sound.heart(lerp(0.12, 0.5, G.danger)); }
   G.heartPulse = Math.max(0, G.heartPulse - dt * 4);
@@ -2565,11 +2632,11 @@ function drawHUD() {
     // what the dog knows
     const k = dog.state === 'hunt' || dog.state === 'windup' || dog.state === 'pounce' || dog.state === 'lunge' || dog.state === 'burst' ? 2
       : dog.state === 'search' ? 1 : 0;
-    const quiet = dog.state === 'lurk';
+    const quiet = dog.state === 'lurk' || dog.state === 'blink';
     ctx.drawImage(SPR.eye[quiet ? 0 : k], W / 2 - 10, 4, 20, 10);
     const lab = quiet ? '' : k === 2 ? 'IT SEES YOU' : k === 1 ? 'IT IS SEARCHING' : dog.state === 'stun' ? 'STUNNED' : '';
     if (lab) text(lab, W / 2, 15, k === 2 ? 'r' : 'y', 1, 1);
-    if (quiet) text('...TOO QUIET', W / 2, 15, 'g', 1, 1);
+    if (quiet) text(dog.state === 'blink' ? '...WHERE DID IT GO?' : '...TOO QUIET', W / 2, 15, 'g', 1, 1);
     textS(G.clockStr, W - 6, 5, G.dawn > 0.3 ? 'y' : 'w', 2, 2);
   } else {
     catHud(0);
@@ -2632,7 +2699,7 @@ function drawQTE() {
   ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 81, 139, 162, 6);
   ctx.fillStyle = frac < 0.35 ? ((G.frame & 4) ? '#ff3a3a' : '#a01f25') : '#e0393a';
   ctx.fillRect(W / 2 - 80, 140, 160 * frac, 4);
-  if (TouchUI.on) text('SWIPE ANYWHERE IN EACH DIRECTION', W / 2, 146, 'w', 1, 1);
+  if (TouchUI.on) text('TAP THE ARROW PAD  ·  OR SWIPE ANYWHERE', W / 2, 146, 'w', 1, 1);
 }
 
 const CONTROLS_SOLO = [
@@ -2644,7 +2711,7 @@ const CONTROLS_DUO = [
   ['ARROWS', 'DOG: MOVE'], ['RIGHT SHIFT', 'DOG: CHARGE'], ['/ OR ENTER', 'DOG: POUNCE'], ['GREEN TRAIL', 'DOG: SCENT'], ['RINGS', 'DOG: NOISE HEARD'],
 ];
 const CONTROLS_TOUCH = [
-  ['LEFT THUMB', 'MOVE (DRAG ANYWHERE)'], ['SPRINT', 'HOLD TO RUN'], ['DASH', 'TAP TO DASH'], ['SWIPE', 'STRUGGLE FREE WHEN BITTEN'], ['UNDER FURNITURE', 'HIDE'],
+  ['LEFT THUMB', 'MOVE (DRAG ANYWHERE)'], ['SPRINT', 'HOLD TO RUN'], ['DASH', 'TAP TO DASH'], ['ARROW PAD', 'TAP TO STRUGGLE FREE'], ['UNDER FURNITURE', 'HIDE'],
   ['VENTS', 'CAT-ONLY SHORTCUTS'], ['VASES', 'SMASH NEAR THE DOG'], ['RUNNING', 'IS LOUD. WALK WHEN IT IS NEAR'], ['PAUSE BUTTON', 'MENU, SOUND, FULLSCREEN'], ['HEADPHONES', 'HEAR WHICH SIDE IT IS ON'],
 ];
 function drawControls(y, duo) {
@@ -2787,7 +2854,7 @@ function newRun(quick) {
   G.introT = quick ? 2.6 : 0; G.introT0 = G.introT; G.fade = 1; G.blackout = false; G.endShown = false; G.newBest = false;
   G.shake = 0; G.flash = 0; G.danger = 0; G.heartT = 0; G.runTextT = -1; G.qte.active = false; G.endT = 0;
   G.scare.idx = 0; G.scare.phase = 0; G.ghost.active = false; G.ghost.next = rand(22, 36); G.ambT = rand(5, 9);
-  G.nurseryDone = false; G.roomLabelT = 0; G.hintT = 0; G.lightT = quick ? 6 : 0.7;
+  G.nurseryDone = false; G.roomLabelT = 0; G.hintT = 0; G.lightT = quick ? 6 : 0.7; G.blinkCD = CONFIG.blink.grace;
   updateCameras(0, true);
   Sound.setGrowl(0);
 }
