@@ -39,7 +39,7 @@ Two-player mode needs a keyboard. On Android, FULLSCREEN also locks the screen t
 
 - Hide under beds and tables, but don't stay put while the dog is close.
 - In solo, losing it completely only buys you a few seconds: the lights flicker, the growl stops, and it steps out of the dark right behind you. Keep moving and keep looking back.
-- Vents are cat-only shortcuts.
+- Vents are cat-only shortcuts, not hiding places. Your nerve bleeds while you're inside, after a few seconds the metal groans loud enough for the whole house to hear, and when you climb out the grates stay shut for seven seconds.
 - Smash a vase right next to the dog to stun it. The crash is loud.
 - Use headphones: the growl and paw steps tell you which side the dog is on.
 

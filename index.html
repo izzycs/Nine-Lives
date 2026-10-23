@@ -126,6 +126,9 @@ const CONFIG = {
     stamDrain: 0.38, stamRegen: 0.24, exhaustedUntil: 0.35,
     nerveDrain: 0.24, nerveRegen: 0.16, nerveRange: 72,
     invuln: 1.4, sightRadius: 150,
+    // vents: nerve bleeds while you are inside; after ventWarn seconds the metal groans
+    // (loud, and the bleed triples); climbing out shuts the grates for ventLock seconds
+    ventDrain: 0.08, ventWarn: 4.5, ventCreak: 1.5, ventLock: 7,
   },
   dog: {
     half: 5.5, catchDist: 11,
@@ -1760,7 +1763,14 @@ function losPath(g) {
 }
 
 // ---- collision: axis-separated box vs tiles, with a nudge around corners ----
-function blocked(m, isCat) { return isCat ? (m === TW || m === TB) : m !== TF; }
+let VENT_LOCK = false;      // true while the grates are shut to the cat (just after it climbed out of one)
+function blocked(m, isCat) { return isCat ? (m === TW || m === TB || (m === TV && VENT_LOCK)) : m !== TF; }
+// does a body of half-size h at (x, y) overlap any tile of kind m?
+function touchesTile(x, y, h, m) {
+  const x0 = Math.floor((x - h) / T), x1 = Math.floor((x + h) / T), y0 = Math.floor((y - h) / T), y1 = Math.floor((y + h) / T);
+  for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (tx >= 0 && ty >= 0 && tx < MW && ty < MH && MAP[ty * MW + tx] === m) return true;
+  return false;
+}
 function hitBox(x, y, h, isCat) {
   const x0 = Math.floor((x - h) / T), x1 = Math.floor((x + h) / T), y0 = Math.floor((y - h) / T), y1 = Math.floor((y + h) / T);
   for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
@@ -1857,7 +1867,9 @@ const cat = {
 function resetCat() {
   Object.assign(cat, { x: (SPAWN_CAT[0] + 0.5) * T, y: (SPAWN_CAT[1] + 0.5) * T, vx: 0, vy: 0, ang: -Math.PI / 2, state: 'free',
     stamina: 1, exhausted: false, dashT: 0, dashCD: 0, nerve: 1, hidden: false, inv: 0, anim: 0, speed: 0, noiseT: 0, scentT: 0,
-    sx: -999, sy: -999, room: -1, lastCreak: -1, sprinting: false, visible: true, pianoT: 0, hideT: 0 });
+    sx: -999, sy: -999, room: -1, lastCreak: -1, sprinting: false, visible: true, pianoT: 0, hideT: 0,
+    inVent: false, ventT: 0, ventCD: 0, ventCreakT: 0 });
+  VENT_LOCK = false;
 }
 const dog = {
   x: 0, y: 0, vx: 0, vy: 0, ang: 0, state: 'wander', t: 0, tx: 0, ty: 0, lastX: 0, lastY: 0, lost: 0, sees: false,
@@ -1963,9 +1975,26 @@ function updateCat(dt) {
   ti = tIdx(Math.floor(cat.x / T), Math.floor(cat.y / T));
   if (CREAK[ti] && ti !== cat.lastCreak && cat.speed > 30) { cat.lastCreak = ti; Sound.creak(0.14); makeNoise(cat.x, cat.y, CONFIG.noise.creak); }
   if (!CREAK[ti]) cat.lastCreak = -1;
-  const m = MAP[ti];
+  const m = MAP[ti], inVent = m === TV;
   cat.hidden = m === TU || m === TV;
   cat.hideT = cat.hidden ? cat.hideT + dt : 0;
+  // vents are a shortcut, not a home. Time inside adds up (and only slowly fades outside, so
+  // hopping in and out does not reset it); once you climb out the grates stay shut for a while.
+  if (inVent) {
+    if (!cat.inVent) { cat.inVent = true; cat.ventCreakT = C.ventCreak; }
+    cat.ventT += dt;
+    if (cat.ventT > C.ventWarn) {                      // the old metal groans under you: the whole house hears it
+      cat.ventCreakT -= dt;
+      if (cat.ventCreakT <= 0) { cat.ventCreakT = C.ventCreak; Sound.creak(0.26); makeNoise(cat.x, cat.y, CONFIG.noise.creak); G.shake = Math.max(G.shake, 0.15); }
+    }
+  } else {
+    if (cat.inVent) { cat.inVent = false; cat.ventCD = C.ventLock; Sound.creak(0.18); popup('GRATE SHUT', 'g', cat.x, cat.y - 14); }
+    cat.ventT = Math.max(0, cat.ventT - dt * 0.5);
+  }
+  cat.ventCD -= dt;
+  // the lock engages once the cat is fully clear of the grate and then holds until the cooldown ends
+  if (cat.ventCD <= 0) VENT_LOCK = false;
+  else if (!VENT_LOCK && !touchesTile(cat.x, cat.y, C.half, TV)) VENT_LOCK = true;
   // under the piano: the strings answer
   cat.pianoT -= dt;
   if (m === TU && ROOMOF[ti] === 7 && cat.pianoT <= 0 && cat.speed > 10) { cat.pianoT = 6; Sound.piano(); makeNoise(cat.x, cat.y, CONFIG.noise.piano); }
@@ -1979,11 +2008,14 @@ function updateCat(dt) {
   for (let i = 0; i < VASES.length; i++) { const v = VASES[i]; if (!v.broken && cat.speed > 35 && Math.hypot(v.x - cat.x, v.y - cat.y) < 7.5) breakVase(v); }
   // nerve: hiding right under the dog's nose is terrifying
   const close = dist(cat, dog) < C.nerveRange && (dog.state === 'hunt' || dog.state === 'search' || (G.twoP && dog.state !== 'stun'));
-  if (cat.hidden && close) {
-    cat.nerve -= C.nerveDrain * dt;
-    if (cat.nerve <= 0) {      // panic: bolt away from the dog
-      cat.nerve = 0.45; const a = Math.atan2(cat.y - dog.y, cat.x - dog.x);
-      cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); Sound.hiss(0.5); popup('PANIC!', 'r', cat.x, cat.y - 14);
+  const cramped = inVent ? C.ventDrain * (cat.ventT > C.ventWarn ? 3 : 1) : 0;    // a vent is no place to wait
+  if (cat.hidden && (close || inVent)) {
+    cat.nerve -= ((close ? C.nerveDrain : 0) + cramped) * dt;
+    if (cat.nerve <= 0) {      // panic: bolt away from the dog, or out of the vent
+      cat.nerve = 0.45;
+      let a = Math.atan2(cat.y - dog.y, cat.x - dog.x);
+      if (inVent) { const t = nearestFloor(ti); if (t >= 0) a = Math.atan2((Math.floor(t / MW) + 0.5) * T - cat.y, (t % MW + 0.5) * T - cat.x); }
+      cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); Sound.hiss(0.5); popup(inVent ? 'TOO CRAMPED!' : 'PANIC!', 'r', cat.x, cat.y - 14);
     }
   } else cat.nerve = Math.min(1, cat.nerve + C.nerveRegen * dt);
   // entering a room
@@ -2621,10 +2653,11 @@ function catHud(x0) {
   ctx.globalAlpha = ready ? 1 : 0.35; ctx.drawImage(SPR.paw, x0 + 84, 4, 8, 7); ctx.globalAlpha = 1;
   if (!ready) { ctx.fillStyle = '#cfd6ff'; ctx.fillRect(x0 + 84, 12.5, 8 * (1 - cat.dashCD / CONFIG.cat.dashCooldown), 1); }
   if (cat.hidden) {
-    textS('HIDDEN', x0 + 6, 16, cat.nerve < 0.35 && (G.frame & 8) ? 'r' : 'b', 1, 0);
-    bar(x0 + 40, 18.5, 40, cat.nerve, cat.nerve < 0.35 ? '#e0393a' : '#9fc4ff', '#10141c');
-    text('NERVE', x0 + 84, 16, 'g', 1, 0);
-  }
+    const cramped = cat.inVent && cat.ventT > CONFIG.cat.ventWarn;
+    textS(cramped ? 'CRAMPED' : cat.inVent ? 'IN VENT' : 'HIDDEN', x0 + 6, 16, (cat.nerve < 0.35 || cramped) && (G.frame & 8) ? 'r' : 'b', 1, 0);
+    bar(x0 + 46, 18.5, 36, cat.nerve, cat.nerve < 0.35 ? '#e0393a' : '#9fc4ff', '#10141c');
+    text('NERVE', x0 + 86, 16, 'g', 1, 0);
+  } else if (cat.ventCD > 0) text('GRATES SHUT ' + Math.ceil(cat.ventCD), x0 + 6, 16, 'g', 1, 0);
 }
 function drawHUD() {
   if (!G.twoP) {
@@ -2996,7 +3029,7 @@ resetWorld();
 G.state = 'title'; G.fade = 1;
 touchReady = true;
 TouchUI.set(TouchUI.initial);
-window.__NL = { G, cat, dog, CONFIG, VASES, MAP, startLunge, startWin, breakVase, Input, TouchUI };   // handy for tinkering in the console
+window.__NL = { G, cat, dog, CONFIG, VASES, MAP, startLunge, startWin, breakVase, Input, TouchUI, get ventLock() { return VENT_LOCK; } };   // handy for tinkering in the console
 requestAnimationFrame(frame);
 </script>
 </body>
