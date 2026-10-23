@@ -2,16 +2,70 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nine Lives">
 <title>NINE LIVES</title>
 <style>
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-  body { display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; background: #000; outline: none; }
+  html { height: 100dvh; }
+  body {
+    display: flex; align-items: center; justify-content: center; position: fixed; inset: 0;
+    touch-action: none; overscroll-behavior: none; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; background: #000; outline: none; touch-action: none; }
+
+  /* ---- touch controls (shown only on touch devices) ---- */
+  #ui { position: fixed; inset: 0; touch-action: none; font: bold 15px "Trebuchet MS", "Helvetica Neue", Arial, sans-serif; color: #ece6da; letter-spacing: 0.06em; }
+  #ui[hidden] { display: none; }
+  #ui.menu #btnSprint, #ui.menu #btnDash, #ui.menu #stick, #ui.menu #btnPause { display: none; }
+  #ui.play #menu { display: none; }
+  #ui.none #menu, #ui.none #btnPause, #ui.none #btnSprint, #ui.none #btnDash, #ui.none #stick { display: none; }
+  #stick { position: fixed; left: 0; top: 0; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; pointer-events: none;
+           background: rgba(236,230,218,0.07); border: 2px solid rgba(236,230,218,0.3); display: none; will-change: transform; }
+  #stick.on { display: block; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%;
+          background: rgba(236,230,218,0.55); box-shadow: 0 0 12px rgba(0,0,0,0.5); will-change: transform; }
+  .act { position: fixed; border-radius: 50%; border: 2px solid rgba(236,230,218,0.35); background: rgba(20,16,14,0.55);
+         color: #ece6da; font: inherit; display: flex; align-items: center; justify-content: center; padding: 0;
+         touch-action: none; -webkit-user-select: none; user-select: none; outline: none; }
+  .act.down { background: rgba(224,57,58,0.45); border-color: rgba(255,120,110,0.8); }
+  #btnDash { width: clamp(64px, 20vmin, 96px); height: clamp(64px, 20vmin, 96px); right: calc(env(safe-area-inset-right, 0px) + 18px); bottom: calc(env(safe-area-inset-bottom, 0px) + 22px); }
+  #btnSprint { width: clamp(54px, 17vmin, 80px); height: clamp(54px, 17vmin, 80px); font-size: 12px;
+               right: calc(env(safe-area-inset-right, 0px) + clamp(64px, 20vmin, 96px) + 34px); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); }
+  #btnSprint.ready { border-color: rgba(217,176,72,0.7); }
+  #btnDash.cool { opacity: 0.45; }
+  #btnPause { width: 40px; height: 40px; left: 50%; margin-left: -20px; bottom: calc(env(safe-area-inset-bottom, 0px) + 6px); font-size: 14px; }
+  #menu { position: fixed; left: 50%; transform: translateX(-50%); top: calc(var(--gy, 0px) + var(--gs, 1) * var(--my, 100) * 1px);
+          display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: min(96vw, 720px); }
+  #menu button { font: inherit; font-size: 14px; letter-spacing: 0.1em; color: #ece6da; background: rgba(20,16,14,0.78); border: 2px solid rgba(236,230,218,0.35);
+                 border-radius: 8px; padding: 12px 18px; min-width: 104px; touch-action: manipulation; outline: none; -webkit-user-select: none; user-select: none; }
+  #menu button.big { font-size: 19px; padding: 14px 40px; border-color: rgba(243,198,79,0.8); color: #f3c64f; }
+  #menu button.down, #menu button:active { background: rgba(224,57,58,0.45); }
+  #menu .note { width: 100%; text-align: center; color: #8d8a95; font-size: 12px; font-weight: normal; }
+  #rotate { position: fixed; inset: 0; background: #000; color: #ece6da; display: none; align-items: center; justify-content: center; text-align: center; z-index: 10;
+            font: bold 18px "Trebuchet MS", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.1em; padding: 24px; }
+  #rotate.on { display: flex; }
+  #rotate b { display: block; font: bold 44px Georgia, "Times New Roman", serif; color: #e0393a; margin-bottom: 18px; }
+  #rotate span { display: block; font-size: 13px; color: #8d8a95; margin-top: 14px; font-weight: normal; }
+  #rotate i { display: block; width: 36px; height: 64px; border: 3px solid #ece6da; border-radius: 8px; margin: 0 auto 22px; animation: rot 1.6s ease-in-out infinite; }
+  @keyframes rot { 0%, 25% { transform: rotate(0deg); } 60%, 100% { transform: rotate(90deg); } }
 </style>
 </head>
 <body>
 <canvas id="game" width="960" height="540"></canvas>
+<div id="ui" class="none" hidden>
+  <div id="stick"><div id="knob"></div></div>
+  <button id="btnSprint" class="act" type="button">SPRINT</button>
+  <button id="btnDash" class="act" type="button">DASH</button>
+  <button id="btnPause" class="act" type="button">&#10074;&#10074;</button>
+  <div id="menu"></div>
+</div>
+<div id="rotate"><div><b>NINE LIVES</b><i></i>TURN YOUR PHONE SIDEWAYS<span>The house is wider than it is tall.</span></div></div>
 <script>
 'use strict';
 /* ==========================================================================
@@ -100,12 +154,25 @@ canvas.width = W * RES; canvas.height = H * RES;
 const ctx = canvas.getContext('2d', { alpha: false });
 ctx.imageSmoothingEnabled = true;
 
+// The viewport can change under us on phones (address bar, rotation), so the canvas is
+// refit on every signal we can get; the DOM overlay reads the result through CSS vars.
+let viewW = 0, viewH = 0, touchReady = false;
 function fitCanvas() {
-  const s = Math.min(window.innerWidth / W, window.innerHeight / H);
-  canvas.style.width = Math.floor(W * s) + 'px';
-  canvas.style.height = Math.floor(H * s) + 'px';
+  const vv = window.visualViewport;
+  viewW = Math.round(vv ? vv.width : window.innerWidth) || window.innerWidth;
+  viewH = Math.round(vv ? vv.height : window.innerHeight) || window.innerHeight;
+  const s = Math.min(viewW / W, viewH / H), cw = Math.floor(W * s), ch = Math.floor(H * s);
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+  const st = document.documentElement.style;
+  st.setProperty('--gs', s.toFixed(4));
+  st.setProperty('--gx', Math.floor((viewW - cw) / 2) + 'px');
+  st.setProperty('--gy', Math.floor((viewH - ch) / 2) + 'px');
+  if (touchReady) TouchUI.layout();
 }
 window.addEventListener('resize', fitCanvas);
+window.addEventListener('orientationchange', () => { fitCanvas(); setTimeout(fitCanvas, 120); setTimeout(fitCanvas, 500); });
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fitCanvas);
 fitCanvas();
 
 // Offscreen canvas in world units: backing store is RES× larger, context pre-scaled.
@@ -132,12 +199,14 @@ const P2KEYS = { ArrowRight: 0, ArrowLeft: 1, ArrowUp: 2, ArrowDown: 3, ShiftRig
 const ARROW_GLYPH = ['→', '←', '↑', '↓'];
 const WASD_GLYPH = ['D', 'A', 'W', 'S'];
 const Input = {
-  held: new Uint8Array(13), hit: new Uint8Array(13),       // everything (solo + menus)
+  held: new Uint8Array(13), hit: new Uint8Array(13),       // everything (solo + menus): keyboard OR touch
+  kb: new Uint8Array(13),                                  // keyboard-only held state (merged into `held`)
   p1held: new Uint8Array(6), p1hit: new Uint8Array(6),     // WASD side
   p2held: new Uint8Array(6), p2hit: new Uint8Array(6),     // arrow side
   any: false,
   clearHits() { this.hit.fill(0); this.p1hit.fill(0); this.p2hit.fill(0); this.any = false; },
-  releaseAll() { this.held.fill(0); this.p1held.fill(0); this.p2held.fill(0); },
+  releaseAll() { this.held.fill(0); this.kb.fill(0); this.p1held.fill(0); this.p2held.fill(0); if (touchReady) TouchUI.release(); },
+  merge(a) { this.held[a] = (this.kb[a] | TouchUI.held[a]) ? 1 : 0; },
 };
 // the cat's and the dog's key arrays for the current mode (set every update)
 let CH = Input.held, CT = Input.hit, DH = Input.p2held, DT = Input.p2hit;
@@ -151,7 +220,8 @@ window.addEventListener('keydown', e => {
   if ((a !== undefined && a <= A.DASH) || e.code === 'Slash' || e.code === 'Enter') e.preventDefault();
   Sound.unlock();                                       // Chrome autoplay: start audio on first key
   if (e.repeat) return;
-  if (a !== undefined) { Input.held[a] = 1; Input.hit[a] = 1; }
+  if (TouchUI.on && a !== undefined) TouchUI.set(false);    // a keyboard showed up: hide the thumb controls
+  if (a !== undefined) { Input.kb[a] = 1; Input.held[a] = 1; Input.hit[a] = 1; }
   const p1 = P1KEYS[e.code], p2 = P2KEYS[e.code];
   if (p1 !== undefined) { Input.p1held[p1] = 1; Input.p1hit[p1] = 1; }
   if (p2 !== undefined) { Input.p2held[p2] = 1; Input.p2hit[p2] = 1; }
@@ -159,7 +229,7 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => {
   const a = KEYMAP[e.code];
-  if (a !== undefined) Input.held[a] = 0;
+  if (a !== undefined) { Input.kb[a] = 0; Input.merge(a); }
   const p1 = P1KEYS[e.code], p2 = P2KEYS[e.code];
   if (p1 !== undefined) Input.p1held[p1] = 0;
   if (p2 !== undefined) Input.p2held[p2] = 0;
@@ -177,6 +247,166 @@ document.addEventListener('visibilitychange', () => {
     lastTime = performance.now();
   }
 });
+
+// ==========================================================================
+// 4b. TOUCH — phones and tablets. A floating stick under the left thumb, SPRINT
+//     (hold) and DASH (tap) under the right, a pause button, and swipes for the
+//     struggle. Menus become real buttons. Everything feeds the same Input arrays
+//     the keyboard uses, so the game logic does not know the difference.
+// ==========================================================================
+const TouchUI = (() => {
+  const ui = document.getElementById('ui'), menu = document.getElementById('menu'), rotate = document.getElementById('rotate');
+  const stickEl = document.getElementById('stick'), knob = document.getElementById('knob');
+  const bSprint = document.getElementById('btnSprint'), bDash = document.getElementById('btnDash'), bPause = document.getElementById('btnPause');
+  const STICK_R = 46, DEAD = 0.2, SWIPE = 26;             // css px / fraction / css px
+  const TU = {
+    on: false, portrait: false,
+    held: new Uint8Array(13),
+    stick: { id: -1, on: false, x: 0, y: 0, ox: 0, oy: 0 },   // x,y: analog, unit circle
+    ptrs: new Map(),                                           // pointerId -> { kind, x0, y0, done }
+    mode: '', menuKey: '',
+  };
+  const canFS = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
+  const press = a => { Input.hit[a] = 1; Input.any = true; };
+  const hold = (a, v) => { TU.held[a] = v ? 1 : 0; Input.merge(a); };
+  const setDirs = (x, y) => { hold(A.RIGHT, x > 0.35); hold(A.LEFT, x < -0.35); hold(A.DOWN, y > 0.35); hold(A.UP, y < -0.35); };
+
+  function set(v) {
+    if (v === TU.on) return;
+    TU.on = v; ui.hidden = !v; TU.menuKey = '';
+    if (!v) release();
+    layout(); sync();
+  }
+  function release() {
+    TU.ptrs.clear(); TU.stick.on = false; TU.stick.id = -1; TU.stick.x = TU.stick.y = 0;
+    stickEl.classList.remove('on'); bSprint.classList.remove('down'); bDash.classList.remove('down');
+    for (let a = 0; a <= A.DASH; a++) hold(a, false);
+  }
+  function layout() {
+    const p = viewH > viewW * 1.05;
+    if (p !== TU.portrait) { TU.portrait = p; TU.menuKey = ''; }
+    rotate.classList.toggle('on', TU.on && p);
+    if (TU.on && p && (G.state === 'play' || G.state === 'intro')) setPaused(true);
+  }
+
+  // ---- the stick ----
+  function stickStart(e) {
+    const s = TU.stick; s.id = e.pointerId; s.on = true; s.ox = e.clientX; s.oy = e.clientY; s.x = s.y = 0;
+    stickEl.style.transform = 'translate(' + s.ox + 'px,' + s.oy + 'px)'; knob.style.transform = ''; stickEl.classList.add('on');
+  }
+  function stickMove(e) {
+    const s = TU.stick; let dx = e.clientX - s.ox, dy = e.clientY - s.oy, L = Math.hypot(dx, dy);
+    if (L > STICK_R) {                                  // the base follows a thumb that slides away
+      const k = (L - STICK_R) / L; s.ox += dx * k; s.oy += dy * k; dx -= dx * k; dy -= dy * k; L = STICK_R;
+      stickEl.style.transform = 'translate(' + s.ox + 'px,' + s.oy + 'px)';
+    }
+    knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    const mag = L / STICK_R;
+    if (mag < DEAD) { s.x = s.y = 0; } else { const k = ((mag - DEAD) / (1 - DEAD)) / L; s.x = dx * k; s.y = dy * k; }
+    setDirs(s.x, s.y);
+  }
+  function stickEnd() { TU.stick.on = false; TU.stick.id = -1; TU.stick.x = TU.stick.y = 0; stickEl.classList.remove('on'); setDirs(0, 0); }
+
+  // ---- pointer routing ----
+  function down(e) {
+    if (e.target.closest && e.target.closest('button')) return;
+    if (G.paused) return;
+    if (G.state === 'intro') { press(A.CONFIRM); return; }       // a tap skips the opening
+    if (G.state !== 'play') return;
+    if (G.qte.active) { TU.ptrs.set(e.pointerId, { kind: 'swipe', x0: e.clientX, y0: e.clientY, done: false }); return; }
+    if (!TU.stick.on && e.clientX < viewW * 0.62) { TU.ptrs.set(e.pointerId, { kind: 'stick' }); stickStart(e); }
+  }
+  function move(e) {
+    const p = TU.ptrs.get(e.pointerId); if (!p) return;
+    if (p.kind === 'stick') {
+      if (G.qte.active) { stickEnd(); p.kind = 'swipe'; p.x0 = e.clientX; p.y0 = e.clientY; p.done = false; return; }
+      stickMove(e); return;
+    }
+    if (p.done) return;
+    const dx = e.clientX - p.x0, dy = e.clientY - p.y0;
+    if (Math.hypot(dx, dy) < SWIPE) return;
+    p.done = true;
+    press(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? A.RIGHT : A.LEFT) : (dy > 0 ? A.DOWN : A.UP));
+  }
+  function up(e) {
+    const p = TU.ptrs.get(e.pointerId); if (!p) return;
+    TU.ptrs.delete(e.pointerId);
+    if (p.kind === 'stick') stickEnd();
+  }
+  ui.addEventListener('pointerdown', down);
+  window.addEventListener('pointermove', move, { passive: true });
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+
+  // ---- buttons ----
+  function button(el, onDown, onUp) {
+    el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('down'); try { el.setPointerCapture(e.pointerId); } catch (x) {} onDown(); });
+    const end = () => { el.classList.remove('down'); if (onUp) onUp(); };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end); el.addEventListener('lostpointercapture', end);
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  button(bSprint, () => hold(A.SPRINT, true), () => hold(A.SPRINT, false));
+  button(bDash, () => press(A.DASH));
+  button(bPause, () => press(A.PAUSE));
+
+  // ---- menus: contextual buttons over the title, pause and end screens ----
+  const ACTIONS = {
+    play() { G.menuSel = 0; press(A.ONE); },
+    resume() { press(A.PAUSE); },
+    restart() { press(A.RESTART); },
+    sound() { press(A.MUTE); },
+    fullscreen() { toggleFullscreen(); },
+    menu() { toTitle(); },
+  };
+  function toggleFullscreen() {
+    const el = document.documentElement;
+    if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const req = el.requestFullscreen ? el.requestFullscreen({ navigationUI: 'hide' }) : el.webkitRequestFullscreen && el.webkitRequestFullscreen();
+    if (req && req.then) req.then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }).catch(() => {});
+  }
+  function buttons(list, my) {
+    menu.style.setProperty('--my', my);
+    menu.innerHTML = list.map(b => b.note ? '<div class="note">' + b.note + '</div>' : '<button type="button" data-act="' + b.act + '"' + (b.big ? ' class="big"' : '') + '>' + b.label + '</button>').join('');
+  }
+  menu.addEventListener('pointerdown', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    e.preventDefault(); e.stopPropagation(); Sound.unlock(); Sound.click(0.2);
+    const fn = ACTIONS[b.dataset.act]; if (fn) fn();
+  });
+  function sync() {
+    if (!TU.on) return;
+    const end = (G.state === 'caught' || G.state === 'win') && G.endShown;
+    const mode = G.paused ? 'pause' : G.state === 'title' ? 'title' : end ? 'end' : (G.state === 'play' || G.state === 'intro') ? 'play' : 'none';
+    if (mode !== TU.mode) { TU.mode = mode; ui.className = mode === 'play' ? 'play' : mode === 'none' ? 'none' : 'menu'; }
+    const key = mode + (G.muted ? 'm' : '') + (G.twoP ? '2' : '') + (G.state === 'win' ? 'w' : '') + (canFS ? 'f' : '');
+    if (key !== TU.menuKey) {
+      TU.menuKey = key;
+      const snd = { act: 'sound', label: G.muted ? 'SOUND: OFF' : 'SOUND: ON' }, fs = canFS ? [{ act: 'fullscreen', label: 'FULLSCREEN' }] : [];
+      if (mode === 'title') buttons([{ act: 'play', label: 'PLAY', big: true }, ...fs, { note: 'TWO PLAYERS NEEDS A KEYBOARD' }], 94);
+      else if (mode === 'pause') buttons([{ act: 'resume', label: 'RESUME', big: true }, { act: 'restart', label: 'RESTART' }, snd, ...fs, { act: 'menu', label: 'MAIN MENU' }], 98);
+      else if (mode === 'end') buttons([{ act: 'restart', label: 'TRY AGAIN', big: true }, { act: 'menu', label: 'MAIN MENU' }], G.state === 'win' ? 172 : 180);
+      else menu.innerHTML = '';
+    }
+    if (mode === 'play') {
+      bDash.classList.toggle('cool', cat.dashCD > 0);
+      bSprint.classList.toggle('ready', !cat.exhausted);
+    }
+  }
+
+  // ---- detection: phones start in touch mode; a tap turns it on, a key turns it off ----
+  const coarse = window.matchMedia && matchMedia('(pointer: coarse)').matches && matchMedia('(hover: none)').matches;
+  window.addEventListener('pointerdown', e => { if (e.pointerType === 'touch' && !TU.on) set(true); Sound.unlock(); }, true);
+  window.addEventListener('pointerup', () => Sound.unlock(), true);
+  window.addEventListener('touchend', () => Sound.unlock(), { passive: true });
+  document.addEventListener('touchmove', e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+  document.addEventListener('contextmenu', e => { if (TU.on) e.preventDefault(); });
+  document.addEventListener('gesturestart', e => e.preventDefault());
+
+  TU.set = set; TU.release = release; TU.layout = layout; TU.sync = sync; TU.initial = coarse;
+  return TU;
+})();
+// small rumble on phones that support it (Android); no-op elsewhere
+function buzz(p) { if (TouchUI.on && navigator.vibrate) { try { navigator.vibrate(p); } catch (e) { /* not allowed */ } } }
 
 // ==========================================================================
 // 5. AUDIO — everything synthesized with the Web Audio API.
@@ -1679,6 +1909,7 @@ function updateCat(dt) {
   cat.inv -= dt; cat.dashCD -= dt;
   if (cat.state !== 'free') { cat.vx *= 0.8; cat.vy *= 0.8; return; }
   let ix = CH[A.RIGHT] - CH[A.LEFT], iy = CH[A.DOWN] - CH[A.UP];
+  if (!G.twoP && TouchUI.stick.on) { ix = TouchUI.stick.x; iy = TouchUI.stick.y; }   // thumb stick: any angle
   const L = Math.hypot(ix, iy); if (L) { ix /= L; iy /= L; }
   const moving = L > 0;
   let ti = tIdx(Math.floor(cat.x / T), Math.floor(cat.y / T));
@@ -1736,12 +1967,12 @@ function updateCat(dt) {
 function dash(dx, dy) {
   const L = Math.hypot(dx, dy) || 1, C = CONFIG.cat;
   cat.ddx = dx / L; cat.ddy = dy / L; cat.dashT = C.dashTime; cat.dashCD = C.dashCooldown;
-  makeNoise(cat.x, cat.y, CONFIG.noise.dash); Sound.whoosh();
+  makeNoise(cat.x, cat.y, CONFIG.noise.dash); Sound.whoosh(); buzz(12);
   for (let k = 0; k < 5; k++) emit(cat.x, cat.y, rand(-25, 25), rand(-25, 25), 0.5, 'rgba(150,140,130,0.5)', 2.2, 3);
 }
 function breakVase(v) {
   v.broken = true; v.rot = rand(0, TAU);
-  Sound.shatter(panOf(v.x));
+  Sound.shatter(panOf(v.x)); buzz(30);
   for (let k = 0; k < 12; k++) emit(v.x, v.y, rand(-70, 70), rand(-70, 70), rand(0.3, 0.7), k % 3 ? '#d9d4c6' : '#3a5a8a', rand(0.8, 1.6), 5);
   makeNoise(v.x, v.y, CONFIG.noise.vase);
   const D = CONFIG.dog;
@@ -2017,7 +2248,7 @@ function updateQTE(rawDt) {
   if (!G.twoP) {                    // solo: one wrong key and you're caught
     for (let a = 0; a < 4; a++) {
       if (!Input.hit[a]) continue;
-      if (a === q.keys[q.idx]) { Sound.blip(q.idx); q.idx++; if (q.idx >= q.len) { qteSuccess(); return; } }
+      if (a === q.keys[q.idx]) { Sound.blip(q.idx); buzz(10); q.idx++; if (q.idx >= q.len) { qteSuccess(); return; } }
       else { qteFail(); return; }
     }
   } else {                          // two players: race to finish your own sequence; a wrong key resets yours
@@ -2040,7 +2271,7 @@ function qteSuccess() {
   const a = Math.atan2(cat.y - dog.y, cat.x - dog.x);
   cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); cat.dashT = 0.22;
   stunDog(CONFIG.dog.stun);
-  Sound.hiss(0.5); Sound.yelp(panOf(dog.x)); popup('TWISTED FREE!', 'y', cat.x, cat.y - 16); G.shake = 0.6; G.flash = 0.25;
+  Sound.hiss(0.5); Sound.yelp(panOf(dog.x)); popup('TWISTED FREE!', 'y', cat.x, cat.y - 16); G.shake = 0.6; G.flash = 0.25; buzz([20, 40, 40]);
 }
 function qteFail() { G.qte.active = false; Sound.fail(); startCaught(); }
 
@@ -2285,7 +2516,8 @@ function renderView(vx, vw, px, py, cam, mode) {
   ctx.drawImage(SPR.vig, vx, 0, vw, H);
   if (mode !== 1 && G.danger > 0.05) { ctx.globalAlpha = Math.min(1, G.danger * 0.7 + G.heartPulse * G.danger * 0.25); ctx.drawImage(SPR.redVig, vx, 0, vw, H); ctx.globalAlpha = 1; }
   if (G.dawn > 0) { ctx.globalAlpha = G.dawn; ctx.drawImage(SPR.dawn, vx, 0, vw, H); ctx.globalAlpha = 1; }
-  if (playing && G.state !== 'caught') drawMinimap(vx + vw - SPR.minimap.lw - 5, H - SPR.minimap.lh - 5, mode);
+  // on a phone the bottom right is under the DASH button, so the map moves up below the clock
+  if (playing && G.state !== 'caught') drawMinimap(vx + vw - SPR.minimap.lw - 5, TouchUI.on ? 24 : H - SPR.minimap.lh - 5, mode);
 }
 
 function drawMinimap(x, y, mode) {
@@ -2346,7 +2578,10 @@ function drawHUD() {
   }
   if (G.hintT > 0 && G.state === 'play') {
     ctx.globalAlpha = clamp(G.hintT, 0, 1);
-    if (!G.twoP) {
+    if (TouchUI.on) {          // the bottom edge belongs to the thumbs on a phone
+      text('HOLD SPRINT TO RUN  ·  TAP DASH  ·  HIDE UNDER BEDS AND TABLES', W / 2, 27, 'g', 1, 1);
+      text('ONLY YOU FIT THROUGH VENTS', W / 2, 37, 'g', 1, 1);
+    } else if (!G.twoP) {
       text('SHIFT SPRINT  ·  SPACE DASH  ·  HIDE UNDER BEDS AND TABLES  ·  ONLY YOU FIT THROUGH VENTS', W / 2, H - 14, 'g', 1, 1);
     } else {
       text('WASD  ·  L-SHIFT SPRINT  ·  SPACE DASH', W / 4, H - 14, 'g', 1, 1);
@@ -2384,6 +2619,7 @@ function drawQTE() {
   ctx.fillStyle = '#000'; ctx.fillRect(W / 2 - 81, 139, 162, 6);
   ctx.fillStyle = frac < 0.35 ? ((G.frame & 4) ? '#ff3a3a' : '#a01f25') : '#e0393a';
   ctx.fillRect(W / 2 - 80, 140, 160 * frac, 4);
+  if (TouchUI.on) text('SWIPE ANYWHERE IN EACH DIRECTION', W / 2, 146, 'w', 1, 1);
 }
 
 const CONTROLS_SOLO = [
@@ -2394,8 +2630,12 @@ const CONTROLS_DUO = [
   ['WASD', 'CAT: MOVE'], ['LEFT SHIFT', 'CAT: SPRINT'], ['SPACE', 'CAT: DASH'], ['FURNITURE, VENTS', 'CAT: HIDE'], ['P  M  F  R', 'PAUSE MUTE FPS RESTART'],
   ['ARROWS', 'DOG: MOVE'], ['RIGHT SHIFT', 'DOG: CHARGE'], ['/ OR ENTER', 'DOG: POUNCE'], ['GREEN TRAIL', 'DOG: SCENT'], ['RINGS', 'DOG: NOISE HEARD'],
 ];
+const CONTROLS_TOUCH = [
+  ['LEFT THUMB', 'MOVE (DRAG ANYWHERE)'], ['SPRINT', 'HOLD TO RUN'], ['DASH', 'TAP TO DASH'], ['SWIPE', 'STRUGGLE FREE WHEN BITTEN'], ['UNDER FURNITURE', 'HIDE'],
+  ['VENTS', 'CAT-ONLY SHORTCUTS'], ['VASES', 'SMASH NEAR THE DOG'], ['RUNNING', 'IS LOUD. WALK WHEN IT IS NEAR'], ['PAUSE BUTTON', 'MENU, SOUND, FULLSCREEN'], ['HEADPHONES', 'HEAR WHICH SIDE IT IS ON'],
+];
 function drawControls(y, duo) {
-  const list = duo ? CONTROLS_DUO : CONTROLS_SOLO;
+  const list = TouchUI.on ? CONTROLS_TOUCH : duo ? CONTROLS_DUO : CONTROLS_SOLO;
   for (let i = 0; i < list.length; i++) {
     const col = i < 5 ? 0 : 1, row = col === 0 ? i : i - 5;
     const x = col === 0 ? 46 : 256, yy = y + row * 10;
@@ -2408,15 +2648,17 @@ function drawTitle() {
   const glitch = Math.random() < 0.04 ? randi(-3, 3) : 0;
   textS('NINE LIVES', W / 2 + glitch, 34, 'r', 5, 1);
   text('THE HOUSE AT 3:00 AM  ·  SURVIVE UNTIL DAWN', W / 2, 80, 'g', 1, 1);
-  const opts = ['SOLO  -  YOU ARE THE CAT. THE HOUSE IS NOT EMPTY.', 'TWO PLAYERS  -  CAT (WASD) VS DOG (ARROWS), SPLIT SCREEN'];
-  for (let i = 0; i < 2; i++) {
-    const sel = G.menuSel === i, y = 100 + i * 15;
-    if (sel) { ctx.fillStyle = 'rgba(224,57,58,0.18)'; ctx.fillRect(W / 2 - 170, y - 3, 340, 13); }
-    textS((sel ? '>  ' : '') + (i + 1) + '.  ' + opts[i] + (sel ? '  <' : ''), W / 2, y, sel ? 'y' : 'g', 1, 1);
+  if (!TouchUI.on) {          // on a phone the PLAY button sits here instead
+    const opts = ['SOLO  -  YOU ARE THE CAT. THE HOUSE IS NOT EMPTY.', 'TWO PLAYERS  -  CAT (WASD) VS DOG (ARROWS), SPLIT SCREEN'];
+    for (let i = 0; i < 2; i++) {
+      const sel = G.menuSel === i, y = 100 + i * 15;
+      if (sel) { ctx.fillStyle = 'rgba(224,57,58,0.18)'; ctx.fillRect(W / 2 - 170, y - 3, 340, 13); }
+      textS((sel ? '>  ' : '') + (i + 1) + '.  ' + opts[i] + (sel ? '  <' : ''), W / 2, y, sel ? 'y' : 'g', 1, 1);
+    }
+    const flick = (G.time % 1.1) < 0.75 && Math.random() > 0.04;
+    if (flick) text('↑ ↓ TO CHOOSE   ·   ENTER OR SPACE TO START', W / 2, 133, 'w', 1, 1);
   }
-  const flick = (G.time % 1.1) < 0.75 && Math.random() > 0.04;
-  if (flick) text('↑ ↓ TO CHOOSE   ·   ENTER OR SPACE TO START', W / 2, 133, 'w', 1, 1);
-  drawControls(152, G.menuSel === 1);
+  drawControls(TouchUI.on ? 160 : 152, G.menuSel === 1);
   if (G.best > 0) text('SOLO BEST: ' + G.bestStr, W / 2, 214, 'y', 1, 1);
   text('USE HEADPHONES. LISTEN FOR WHICH SIDE IT IS ON.', W / 2, 250, 'g', 1, 1);
 }
@@ -2450,6 +2692,7 @@ function drawEnd() {
     text((G.twoP ? 'THE CAT SURVIVED ' : 'YOU SURVIVED ') + G.survivedStr, W / 2, 134, 'w', 1, 1);
     text('THE CLOCK READ ' + G.endClockStr, W / 2, 147, 'g', 1, 1);
     if (!G.twoP) text((G.newBest ? 'NEW BEST: ' : 'BEST: ') + G.bestStr, W / 2, 160, 'y', 1, 1);
+    if (TouchUI.on) return;                                     // the buttons are real on a phone
     if ((G.time % 1) < 0.7) textS('PRESS R TO TRY AGAIN', W / 2, 186, 'w', 2, 1);
     text('ESC FOR MENU', W / 2, 210, 'g', 1, 1);
   } else if (G.state === 'win' && G.endShown) {
@@ -2461,13 +2704,14 @@ function drawEnd() {
       text('TIME SURVIVED ' + G.survivedStr, W / 2, 138, 'w', 1, 1);
       text((G.newBest ? 'NEW BEST: ' : 'BEST: ') + G.bestStr, W / 2, 152, 'y', 1, 1);
     }
-    if ((G.time % 1) < 0.7) textS('PRESS R TO PLAY AGAIN   ·   ESC FOR MENU', W / 2, 166, 'w', 1, 1);
+    if (!TouchUI.on && (G.time % 1) < 0.7) textS('PRESS R TO PLAY AGAIN   ·   ESC FOR MENU', W / 2, 166, 'w', 1, 1);
   }
 }
 
 function drawPause() {
   ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
   textS('PAUSED', W / 2, 50, 'w', 4, 1);
+  if (TouchUI.on) { drawControls(192, false); return; }     // the buttons sit between the title and the list
   drawControls(110, G.twoP);
   text('P / ESC TO RESUME', W / 2, 190, 'y', 1, 1);
 }
@@ -2541,7 +2785,11 @@ function startPlay() {
 function startCaught() {
   G.state = 'caught'; G.endT = 0; G.blackout = false; G.endShown = false;
   cat.state = 'caught'; dog.state = 'lunge'; dog.alpha = 1;
-  Sound.snarl(0.8); saveBest();
+  Sound.snarl(0.8); saveBest(); buzz([60, 40, 220]);
+}
+function toTitle() {
+  resetWorld(); G.state = 'title'; G.fade = 1; G.qte.active = false; Sound.setGrowl(0);
+  if (G.paused) setPaused(false);
 }
 function startWin() {
   G.state = 'win'; G.endT = 0; G.endShown = false;
@@ -2633,36 +2881,41 @@ function handleMeta() {
   if (Input.hit[A.PAUSE]) {
     Input.hit[A.PAUSE] = 0;
     if (G.state === 'play' || G.state === 'intro') setPaused(!G.paused);
-    else if ((G.state === 'caught' || G.state === 'win') && G.endShown) { resetWorld(); G.state = 'title'; G.fade = 1; Sound.setGrowl(0); }
+    else if ((G.state === 'caught' || G.state === 'win') && G.endShown) toTitle();
   }
   if (Input.hit[A.RESTART] && G.state !== 'title') { Input.hit[A.RESTART] = 0; G.paused = false; newRun(true); }
   if (G.paused) Input.clearHits();
 }
 
 // ==========================================================================
-// 13. MAIN LOOP — fixed 60 Hz update, dt capped at 50 ms
+// 13. MAIN LOOP — fixed 60 Hz update, dt capped at 50 ms. The frame is only
+//     redrawn when the simulation moved (120 Hz phones would otherwise paint
+//     every frame twice for nothing).
 // ==========================================================================
 const STEP = 1 / 60;
-let lastTime = performance.now(), acc = 0;
+let lastTime = performance.now(), acc = 0, redraw = true;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastTime) / 1000; lastTime = now;
   if (dt > 0.05) dt = 0.05; if (dt < 0) dt = 0;
-  fpsFrames++; fpsTime += dt;
-  if (fpsTime >= 0.5) { fpsStr = Math.round(fpsFrames / fpsTime) + ' FPS'; fpsFrames = 0; fpsTime = 0; }
   handleMeta();
   if (!G.paused) {
     acc += dt;
-    while (acc >= STEP) { update(STEP); Input.clearHits(); acc -= STEP; }
-  } else acc = 0;
+    while (acc >= STEP) { update(STEP); Input.clearHits(); acc -= STEP; redraw = true; }
+  } else { acc = 0; redraw = true; }
   if (Input.hit[A.MUTE] || Input.hit[A.FPS]) { Input.hit[A.MUTE] = 0; Input.hit[A.FPS] = 0; }
-  render();
+  fpsTime += dt;
+  if (fpsTime >= 0.5) { fpsStr = Math.round(fpsFrames / fpsTime) + ' FPS'; fpsFrames = 0; fpsTime = 0; }
+  if (redraw) { redraw = false; fpsFrames++; render(); }
+  TouchUI.sync();
 }
 
 buildAll();
 resetWorld();
 G.state = 'title'; G.fade = 1;
-window.__NL = { G, cat, dog, CONFIG, VASES, MAP, startLunge, startWin, breakVase };   // handy for tinkering in the console
+touchReady = true;
+TouchUI.set(TouchUI.initial);
+window.__NL = { G, cat, dog, CONFIG, VASES, MAP, startLunge, startWin, breakVase, Input, TouchUI };   // handy for tinkering in the console
 requestAnimationFrame(frame);
 </script>
 </body>
