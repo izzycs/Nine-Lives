@@ -129,22 +129,34 @@ const CONFIG = {
     // vents: nerve bleeds while you are inside; after ventWarn seconds the metal groans
     // (loud, and the bleed triples); climbing out shuts the grates for ventLock seconds
     ventDrain: 0.08, ventWarn: 4.5, ventCreak: 1.5, ventLock: 7,
+    // solo: the dog paces right outside your hiding place, so nerve breaks fast and does not
+    // come back until you are clear of it
+    soloNerveDrain: 0.5, soloNerveRange: 110, soloPanicNerve: 0.3,
+    shaken: 5,               // solo: after a panic you can't crawl back under furniture for this long
   },
+  // the computer-controlled dog (solo). It is meant to be brutal: faster than a walking cat from
+  // the first second, faster than a sprinting one by the end of the night, and it cuts you off
+  // instead of following your tail. Hiding, dashing and vases are what keep a run alive.
   dog: {
     half: 5.5, catchDist: 11,
-    wander: 44, huntStart: 72, huntEnd: 96, searchFactor: 0.8, farBoost: 1.18,
-    sightLit: 230, sightDark: 100, sightStill: 52, smell: 26, fov: 0.45, closeSense: 34,
-    memory: 0.9, searchTime: 7, repath: 0.25,
-    pounceMin: 24, pounceMax: 66, pounceWindup: 0.34, pounceSpeed: 250, pounceTime: 0.22,
-    pounceCooldown: 3.2, recover: 0.45,
-    stun: 1.4, vaseStunRange: 38, vaseStun: 1.6, scentLife: 14,
+    wander: 60, huntStart: 90, huntEnd: 114, searchFactor: 0.92, farBoost: 1.3,
+    sightLit: 260, sightDark: 140, sightStill: 74, smell: 26, fov: 0.15, closeSense: 46,
+    memory: 1.8, searchTime: 12, repath: 0.15,
+    lead: 0.55,              // seconds of the cat's motion it aims ahead of when it can see you
+    nose: 36, sniffOut: 2.4, sniffRange: 130,   // hidden cats: smelled at `nose`, or after sniffOut s in the same room
+    pounceMin: 22, pounceMax: 86, pounceWindup: 0.24, pounceSpeed: 250, pounceTime: 0.22,
+    pounceCooldown: 2.1, recover: 0.45, soloRecover: 0.32,
+    stun: 1.4, vaseStunRange: 38, vaseStun: 1.6, scentLife: 14, soloScentLife: 18,
+    soloStun: 0.7,           // stuns (vase, twisting free) wear off faster in solo
   },
   dogPlayer: { speed: 84, charge: 114, drain: 0.45, regen: 0.2, pounceWindup: 0.14, pounceCooldown: 2.8, sight: 175 },
   noise: { walk: 40, sprint: 130, dash: 95, vase: 280, creak: 150, piano: 230 },
-  qte: { keysEasy: 3, keysHard: 4, timeEasy: 2.6, timeHard: 1.6, minTime: 1.3, perUseCut: 0.12, slowmo: 0.12, push: 30 },
+  qte: { keysEasy: 3, keysHard: 4, timeEasy: 2.6, timeHard: 1.6, minTime: 1.3, perUseCut: 0.12, slowmo: 0.12, push: 30,
+    // solo: every struggle you win makes the next one longer and quicker (3, 4, 4, then 5 keys)
+    soloKeysMax: 5, soloFiveAfter: 3, soloTime: 2.3, soloCut: 0.14, soloMinTime: 1.45 },
   scare: { times: [50, 116], dodgeWindow: 0.6, slowmo: 0.3, triggerDist: 40, wait: 24, relocate: 7, minDist: 90, maxDist: 320 },
   // solo: when you have shaken it off, it vanishes and reappears right behind you (Jason rules)
-  blink: { grace: 14, cdStart: 24, cdEnd: 13, lostTime: 2.6, minDist: 130, distMin: 62, distMax: 96, fade: 0.75, appear: 0.3 },
+  blink: { grace: 9, cdStart: 16, cdEnd: 8, lostTime: 1.8, minDist: 120, distMin: 56, distMax: 88, fade: 0.6, appear: 0.25 },
   lightning: { min: 12, max: 28 },
   ghost: { min: 28, max: 55 },
 };
@@ -1764,7 +1776,8 @@ function losPath(g) {
 
 // ---- collision: axis-separated box vs tiles, with a nudge around corners ----
 let VENT_LOCK = false;      // true while the grates are shut to the cat (just after it climbed out of one)
-function blocked(m, isCat) { return isCat ? (m === TW || m === TB || (m === TV && VENT_LOCK)) : m !== TF; }
+let HIDE_LOCK = false;      // solo: true while the cat is too shaken to crawl back under furniture (after a panic)
+function blocked(m, isCat) { return isCat ? (m === TW || m === TB || (m === TV && VENT_LOCK) || (m === TU && HIDE_LOCK)) : m !== TF; }
 // does a body of half-size h at (x, y) overlap any tile of kind m?
 function touchesTile(x, y, h, m) {
   const x0 = Math.floor((x - h) / T), x1 = Math.floor((x + h) / T), y0 = Math.floor((y - h) / T), y1 = Math.floor((y + h) / T);
@@ -1868,8 +1881,8 @@ function resetCat() {
   Object.assign(cat, { x: (SPAWN_CAT[0] + 0.5) * T, y: (SPAWN_CAT[1] + 0.5) * T, vx: 0, vy: 0, ang: -Math.PI / 2, state: 'free',
     stamina: 1, exhausted: false, dashT: 0, dashCD: 0, nerve: 1, hidden: false, inv: 0, anim: 0, speed: 0, noiseT: 0, scentT: 0,
     sx: -999, sy: -999, room: -1, lastCreak: -1, sprinting: false, visible: true, pianoT: 0, hideT: 0,
-    inVent: false, ventT: 0, ventCD: 0, ventCreakT: 0 });
-  VENT_LOCK = false;
+    inVent: false, ventT: 0, ventCD: 0, ventCreakT: 0, shakenT: 0 });
+  VENT_LOCK = false; HIDE_LOCK = false;
 }
 const dog = {
   x: 0, y: 0, vx: 0, vy: 0, ang: 0, state: 'wander', t: 0, tx: 0, ty: 0, lastX: 0, lastY: 0, lost: 0, sees: false,
@@ -1995,6 +2008,9 @@ function updateCat(dt) {
   // the lock engages once the cat is fully clear of the grate and then holds until the cooldown ends
   if (cat.ventCD <= 0) VENT_LOCK = false;
   else if (!VENT_LOCK && !touchesTile(cat.x, cat.y, C.half, TV)) VENT_LOCK = true;
+  cat.shakenT -= dt;
+  if (cat.shakenT <= 0) HIDE_LOCK = false;
+  else if (!HIDE_LOCK && !touchesTile(cat.x, cat.y, C.half, TU)) HIDE_LOCK = true;
   // under the piano: the strings answer
   cat.pianoT -= dt;
   if (m === TU && ROOMOF[ti] === 7 && cat.pianoT <= 0 && cat.speed > 10) { cat.pianoT = 6; Sound.piano(); makeNoise(cat.x, cat.y, CONFIG.noise.piano); }
@@ -2007,15 +2023,16 @@ function updateCat(dt) {
   // knock over vases
   for (let i = 0; i < VASES.length; i++) { const v = VASES[i]; if (!v.broken && cat.speed > 35 && Math.hypot(v.x - cat.x, v.y - cat.y) < 7.5) breakVase(v); }
   // nerve: hiding right under the dog's nose is terrifying
-  const close = dist(cat, dog) < C.nerveRange && (dog.state === 'hunt' || dog.state === 'search' || (G.twoP && dog.state !== 'stun'));
+  const close = dist(cat, dog) < (G.twoP ? C.nerveRange : C.soloNerveRange) && (dog.state === 'hunt' || dog.state === 'search' || (G.twoP && dog.state !== 'stun'));
   const cramped = inVent ? C.ventDrain * (cat.ventT > C.ventWarn ? 3 : 1) : 0;    // a vent is no place to wait
   if (cat.hidden && (close || inVent)) {
-    cat.nerve -= ((close ? C.nerveDrain : 0) + cramped) * dt;
+    cat.nerve -= ((close ? (G.twoP ? C.nerveDrain : C.soloNerveDrain) : 0) + cramped) * dt;
     if (cat.nerve <= 0) {      // panic: bolt away from the dog, or out of the vent
-      cat.nerve = 0.45;
+      cat.nerve = G.twoP ? 0.45 : C.soloPanicNerve;
+      if (!G.twoP && !inVent) cat.shakenT = C.shaken;
       let a = Math.atan2(cat.y - dog.y, cat.x - dog.x);
       if (inVent) { const t = nearestFloor(ti); if (t >= 0) a = Math.atan2((Math.floor(t / MW) + 0.5) * T - cat.y, (t % MW + 0.5) * T - cat.x); }
-      cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); Sound.hiss(0.5); popup(inVent ? 'TOO CRAMPED!' : 'PANIC!', 'r', cat.x, cat.y - 14);
+      cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); Sound.hiss(0.5); popup(inVent ? 'TOO CRAMPED!' : G.twoP ? 'PANIC!' : 'PANIC! TOO SCARED TO HIDE', 'r', cat.x, cat.y - 14);
     }
   } else cat.nerve = Math.min(1, cat.nerve + C.nerveRegen * dt);
   // entering a room
@@ -2038,7 +2055,7 @@ function breakVase(v) {
   makeNoise(v.x, v.y, CONFIG.noise.vase);
   const D = CONFIG.dog;
   if (Math.hypot(dog.x - v.x, dog.y - v.y) < D.vaseStunRange && dog.state !== 'lurk' && dog.state !== 'retreat' && dog.state !== 'stun' && G.state === 'play') {
-    stunDog(D.vaseStun); Sound.yelp(panOf(dog.x)); popup('STUNNED!', 'y', dog.x, dog.y - 18);
+    stunDog(D.vaseStun * (G.twoP ? 1 : D.soloStun)); Sound.yelp(panOf(dog.x)); popup('STUNNED!', 'y', dog.x, dog.y - 18);
   }
 }
 function stunDog(t) { dog.state = 'stun'; dog.t = t; dog.vx *= 0.2; dog.vy *= 0.2; }
@@ -2048,7 +2065,7 @@ function dogSeesCat() {
   if (cat.state !== 'free') return false;
   const D = CONFIG.dog, dx = cat.x - dog.x, dy = cat.y - dog.y, d = Math.hypot(dx, dy);
   // hidden: the nose finds you up close, or after a while if it's in the same room
-  if (cat.hidden) return d < D.smell || (cat.hideT > 4 && d < 90 && roomAt(dog.x, dog.y) === cat.room);
+  if (cat.hidden) return d < D.nose || (cat.hideT > D.sniffOut && d < D.sniffRange && roomAt(dog.x, dog.y) === cat.room);
   if (d < D.closeSense) return true;
   if (d > D.sightLit) return false;
   if (!losClear(dog.x, dog.y, cat.x, cat.y)) return false;
@@ -2056,13 +2073,13 @@ function dogSeesCat() {
   if (G.lightning > 0.4) range = D.sightLit;
   if (d > range) return false;
   const f = (Math.cos(dog.ang) * dx + Math.sin(dog.ang) * dy) / d;     // dogs look where they're going
-  return f >= D.fov || d < 70;
+  return f >= D.fov || d < 90;
 }
 function nextScent() {
   let best = null;
   for (let i = 0; i < SCENT.length; i++) {
     const p = SCENT[i];
-    if (!p.ok || p.t <= dog.scentT || G.t - p.t > CONFIG.dog.scentLife) continue;
+    if (!p.ok || p.t <= dog.scentT || G.t - p.t > CONFIG.dog.soloScentLife) continue;
     if (best && p.t <= best.t) continue;
     const d = Math.hypot(p.x - dog.x, p.y - dog.y);
     if (d > 180 || !losClear(dog.x, dog.y, p.x, p.y)) continue;
@@ -2071,15 +2088,25 @@ function nextScent() {
   return best;
 }
 function wanderTarget() {
-  const nose = lerp(0.35, 0.75, G.diff);
+  const nose = lerp(0.7, 0.95, G.diff);
   let p = null;
   if (Math.random() < nose && cat.room >= 0) {         // it can smell roughly where you are
     for (let k = 0; k < 30 && !p; k++) {
-      const x = cat.x + rand(-70, 70), y = cat.y + rand(-70, 70);
+      const x = cat.x + rand(-50, 50), y = cat.y + rand(-50, 50);
       if (tileAt(x, y) === TF && roomAt(x, y) === cat.room) p = [x, y];
     }
   }
   if (!p) p = randomFloorIn(randi(0, ROOMS.length - 1)); dog.tx = p[0]; dog.ty = p[1]; dog.repath = 0; dog.stuck = 0; dog.bestD = 1e9;
+}
+// cut the cat off: aim where it is going, not where it is (only while it is in sight and running)
+function aimAhead(sees, d, hunt) {
+  dog.tx = cat.x; dog.ty = cat.y;
+  if (!sees || cat.hidden || cat.speed < 20 || d < 18) return;
+  const lead = Math.min(CONFIG.dog.lead, d / hunt);
+  for (let k = 1; k >= 0.25; k -= 0.25) {       // shorten the lead until it lands on floor the dog can reach
+    const x = cat.x + cat.vx * lead * k, y = cat.y + cat.vy * lead * k;
+    if (tileAt(x, y) === TF && losClear(cat.x, cat.y, x, y)) { dog.tx = x; dog.ty = y; return; }
+  }
 }
 function toHunt() {
   if (dog.state !== 'hunt') { Sound.bark(0.5 + 0.4 * volOf(dog.x, dog.y, 300), true, panOf(dog.x)); G.shake = Math.max(G.shake, 0.3); }
@@ -2141,7 +2168,7 @@ function dogAI(dt) {
       speed = D.wander;
       dog.scan = (dog.scan || 0) - dt;
       if (dog.scan <= 0) {               // crossing a fresh scent trail puts the nose down
-        dog.scan = 0.5; dog.scentT = G.t - D.scentLife;
+        dog.scan = 0.5; dog.scentT = G.t - D.soloScentLife;
         const p = nextScent();
         if (p) { toSearch(p.x, p.y); dog.scentT = p.t; Sound.sniff(panOf(dog.x)); break; }
       }
@@ -2150,8 +2177,8 @@ function dogAI(dt) {
     case 'hunt':
       if (sees) { dog.lastX = cat.x; dog.lastY = cat.y; dog.lost = 0; dog.scentT = G.t; } else dog.lost += dt;
       if (dog.lost > D.memory) { toSearch(dog.lastX, dog.lastY); break; }
-      dog.tx = cat.x; dog.ty = cat.y;
-      speed = hunt * (sees ? 1 : 0.92) * far;
+      aimAhead(sees, d, hunt);
+      speed = hunt * (sees ? 1 : 0.96) * far;
       if (cat.hidden && d < 60 && dog.barkT <= 0) { dog.barkT = rand(1, 1.8); Sound.bark(0.7, Math.random() < 0.5, panOf(dog.x)); }
       if (sees && !cat.hidden && dog.pounceCD <= 0 && d > D.pounceMin && d < D.pounceMax && clearLine(dog.x, dog.y, cat.x, cat.y, D.half - 1, false)) {
         dog.state = 'windup'; dog.t = 0; Sound.snarl(0.6, panOf(dog.x)); popup('!', 'r', dog.x, dog.y - 16);
@@ -2179,7 +2206,7 @@ function dogAI(dt) {
     case 'pounce': updatePounce(dt); return;
     case 'recover':
       dog.t += dt; dog.vx *= 0.85; dog.vy *= 0.85; dogMove(dt);
-      if (dog.t >= D.recover) { if (sees) dog.state = 'hunt'; else toSearch(cat.x, cat.y); }
+      if (dog.t >= D.soloRecover) { if (sees) dog.state = 'hunt'; else toSearch(cat.x, cat.y); }
       return;
     case 'stun':
       dog.t -= dt; dog.vx *= 0.85; dog.vy *= 0.85; dogMove(dt);
@@ -2281,9 +2308,11 @@ function dogPlayer(dt) {
 function updateDog(dt) {
   if (G.twoP && G.state === 'play') dogPlayer(dt); else dogAI(dt);
   // the bite: touching the cat starts the struggle
-  if (G.state === 'play' && !G.qte.active && cat.state === 'free' && cat.inv <= 0 && !cat.hidden &&
+  // (solo: its jaws also reach a cat lying at the very edge of the furniture)
+  const reach = !cat.hidden || (!G.twoP && dog.state === 'hunt' && cat.hideT > 0.4);
+  if (G.state === 'play' && !G.qte.active && cat.state === 'free' && cat.inv <= 0 && reach &&
       (dog.state === 'hunt' || dog.state === 'search' || dog.state === 'wander' || dog.state === 'pounce' || dog.state === 'windup') &&
-      dist(dog, cat) < CONFIG.dog.catchDist + (dog.state === 'pounce' ? 4 : 0)) startLunge();
+      dist(dog, cat) < CONFIG.dog.catchDist + (dog.state === 'pounce' ? 4 : 0) + (G.twoP ? 0 : 2)) startLunge();
 }
 
 // ---- jump scares (solo): the dog goes quiet and waits inside a wardrobe ----
@@ -2340,10 +2369,12 @@ function startLunge() {
   if (G.qte.active || G.state !== 'play') return;
   const q = G.qte, Q = CONFIG.qte;
   q.active = true; q.idx = 0; q.didx = 0;
-  q.len = G.qteCount === 0 ? Q.keysEasy : (G.diff > 0.45 || G.qteCount >= 2 ? Q.keysHard : randi(Q.keysEasy, Q.keysHard));
+  if (G.twoP) q.len = G.qteCount === 0 ? Q.keysEasy : (G.diff > 0.45 || G.qteCount >= 2 ? Q.keysHard : randi(Q.keysEasy, Q.keysHard));
+  else q.len = G.qteCount === 0 ? Q.keysEasy : G.qteCount >= Q.soloFiveAfter ? Q.soloKeysMax : Q.keysHard;
   for (let i = 0; i < q.len; i++) { let k; do { k = randi(0, 3); } while (i > 0 && k === q.keys[i - 1]); q.keys[i] = k; }
   for (let i = 0; i < q.len; i++) { let k; do { k = randi(0, 3); } while (i > 0 && k === q.dkeys[i - 1]); q.dkeys[i] = k; }
-  q.total = Math.max(Q.minTime, lerp(Q.timeEasy, Q.timeHard, G.diff) - G.qteCount * Q.perUseCut);
+  q.total = G.twoP ? Math.max(Q.minTime, lerp(Q.timeEasy, Q.timeHard, G.diff) - G.qteCount * Q.perUseCut)
+    : Math.max(Q.soloMinTime, Q.soloTime - G.qteCount * Q.soloCut);
   q.timer = q.total;
   cat.state = 'qte'; cat.dashT = 0;
   dog.state = 'lunge'; dog.alpha = 1;
@@ -2380,7 +2411,7 @@ function qteSuccess() {
   cat.state = 'free'; cat.inv = CONFIG.cat.invuln;
   const a = Math.atan2(cat.y - dog.y, cat.x - dog.x);
   cat.dashCD = 0; dash(Math.cos(a), Math.sin(a)); cat.dashT = 0.22;
-  stunDog(CONFIG.dog.stun);
+  stunDog(CONFIG.dog.stun * (G.twoP ? 1 : CONFIG.dog.soloStun));
   Sound.hiss(0.5); Sound.yelp(panOf(dog.x)); popup('TWISTED FREE!', 'y', cat.x, cat.y - 16); G.shake = 0.6; G.flash = 0.25; buzz([20, 40, 40]);
 }
 function qteFail() { G.qte.active = false; Sound.fail(); startCaught(); }
