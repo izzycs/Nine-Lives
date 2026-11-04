@@ -19,7 +19,7 @@ Everything is in one self-contained `index.html` (HTML + CSS + JavaScript, no li
 
 P / Esc pause · M mute · F FPS counter · R restart
 
-When the dog catches you, type the key sequence shown to struggle free. In 2-player, both players race to finish their own sequence.
+When the dog catches you, type the key sequence shown to struggle free. In solo, one wrong key ends the night, and every struggle you win makes the next one longer and faster (up to five keys). In 2-player, both players race to finish their own sequence.
 
 ### Touch (phones and tablets)
 
@@ -37,7 +37,8 @@ Two-player mode needs a keyboard. On Android, FULLSCREEN also locks the screen t
 
 ## Tips
 
-- Hide under beds and tables, but don't stay put while the dog is close.
+- Solo is meant to be brutal. The dog outruns a walking cat from the start and a sprinting one by the end of the night, cuts you off instead of following your tail, and pounces from further away.
+- Hide under beds and tables, but don't stay put while the dog is close. In solo its jaws reach under the edge of the furniture, your nerve breaks fast, and after a panic you're too scared to crawl back under anything for a few seconds.
 - In solo, losing it completely only buys you a few seconds: the lights flicker, the growl stops, and it steps out of the dark right behind you. Keep moving and keep looking back.
 - Vents are cat-only shortcuts, not hiding places. Your nerve bleeds while you're inside, after a few seconds the metal groans loud enough for the whole house to hear, and when you climb out the grates stay shut for seven seconds.
 - Smash a vase right next to the dog to stun it. The crash is loud.
